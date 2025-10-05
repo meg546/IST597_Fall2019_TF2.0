@@ -8,7 +8,6 @@ import matplotlib.pyplot as plt
 import numpy as np
 from math import sqrt
 
-# Create data
 NUM_EXAMPLES = 10000
 
 seed = sum(ord(c) for c in "meg546")
@@ -27,10 +26,8 @@ class LinearRegressionExperiment:
     if noise_level is None:
       noise_level = self.noise_level
 
-    # Generate inputs
     X = tf.random.normal([self.num_examples])
 
-    # Set noise type based on input
     if noise_type == "gaussian":
       noise = tf.random.normal([self.num_examples], stddev=noise_level)
     elif noise_type == "uniform":
@@ -184,14 +181,11 @@ class LinearRegressionExperiment:
   
   def run_experiments(self):
     print("Running experiments...")
-    
-    # ===== Generate base (noise-free) data =====
+
     X_clean, y_clean = self.generate_data(noise_type="gaussian", noise_level=0.0)
     X, y = self.generate_data()  # default includes Gaussian noise, noise_level=1.0
 
-    # -------------------------
     # 1. Loss Functions
-    # -------------------------
     print("\n1. Testing Different Loss Functions")
     loss_functions = ["squared", "huber", "l1", "hybrid"]
     for loss_function in loss_functions:
@@ -199,9 +193,7 @@ class LinearRegressionExperiment:
       result = self.train_model(X, y, loss_function=loss_function, train_steps=2000)
       self.results[f"loss_{loss_function}"] = result
 
-    # -------------------------
     # 2. Learning Rates
-    # -------------------------
     print("\n2. Testing Different Learning Rates")
     learning_rates = [0.0001, 0.001, 0.01, 0.1]
     for learning_rate in learning_rates:
@@ -209,9 +201,7 @@ class LinearRegressionExperiment:
       result = self.train_model(X, y, learning_rate=learning_rate, train_steps=2000)
       self.results[f"learning_rate_{learning_rate}"] = result
 
-    # -------------------------
     # 3. Weight Initializations
-    # -------------------------
     print("\n3. Testing Different Weight Initializations")
     weight_initializations = ["normal", "uniform", "zeros"]
     for weight_initialization in weight_initializations:
@@ -219,9 +209,7 @@ class LinearRegressionExperiment:
       result = self.train_model(X, y, weight_init=weight_initialization, train_steps=2000)
       self.results[f"weight_init_{weight_initialization}"] = result
 
-    # -------------------------
     # 4. Noise Types
-    # -------------------------
     print("\n4. Testing Different Noise Types (Gaussian, Uniform, Exponential)")
     noise_types = ["gaussian", "uniform", "exponential"]
     for noise_type in noise_types:
@@ -229,10 +217,8 @@ class LinearRegressionExperiment:
       X_noisy, y_noisy = self.generate_data(noise_type=noise_type)
       result = self.train_model(X_noisy, y_noisy, train_steps=2000)
       self.results[f"noise_{noise_type}"] = result
-    
-    # -------------------------
+
     # 5. Noise Levels
-    # -------------------------
     print("\n5. Testing Different Noise Levels")
     noise_levels = [0.1, 0.5, 1.0, 2.0, 5.0]
     for noise_level in noise_levels:
@@ -241,42 +227,40 @@ class LinearRegressionExperiment:
       result = self.train_model(X_noisy, y_noisy, train_steps=2000)
       self.results[f"noise_level_{noise_level}"] = result
 
-    # -------------------------
+
     # 5b. With vs Without Data Noise
-    # -------------------------
     print("\n5b. Testing With vs Without Data Noise (explicit)")
     result_clean = self.train_model(X_clean, y_clean, train_steps=2000)
     result_noisy = self.train_model(X, y, train_steps=2000)
     self.results["data_noise_off"] = result_clean
     self.results["data_noise_on"] = result_noisy
 
-    # -------------------------
     # 6. Weight Noise During Training
-    # -------------------------
     print("\n6. Testing Weight Noise During Training")
     results = self.train_model(X, y, add_weight_noise=True, train_steps=2000)
     self.results["weight_noise"] = results
 
-    # -------------------------
+
     # 7. Learning Rate Noise During Training
-    # -------------------------
     print("\n7. Testing Learning Rate Noise During Training")
     result = self.train_model(X, y, add_lr_noise=True, train_steps=2000)
     self.results["lr_noise"] = result
 
-    # -------------------------
     # 8. Patience Scheduling
-    # -------------------------
     print("\n8. Testing Patience Scheduling")
     result = self.train_model(X, y, patience=5, train_steps=2000)
     self.results["patience_scheduling"] = result
 
     print("\nAll experiments completed")
+    
+    # 9. GPU vs CPU
+    print("\n9. GPU vs CPU")
+    times = self.compare_cpu_gpu(X, y, train_steps=2000)
+    self.results["gpu_vs_cpu"] = times
+
     return self.results
 
-  
   def plot_prediction_fit(self, key="loss_squared"):
-      """Visualize predicted vs true regression line."""
       if key in self.results:
           result = self.results[key]
           W, b = result["W"], result["b"]
@@ -289,6 +273,7 @@ class LinearRegressionExperiment:
           plt.show()
         
   def plot_results(self):
+
     # 1. Loss Functions Comparison
     plt.figure(figsize=(10, 6))
     for loss_function in ["squared", "l1", "huber", "hybrid"]:
@@ -426,14 +411,40 @@ class LinearRegressionExperiment:
       fig.tight_layout()
       plt.show()
 
+    # 9. GPU vs CPU Performance
+    if "gpu_vs_cpu" in self.results:
+      times = self.results["gpu_vs_cpu"]
+      devices = [d.replace('/CPU:0', 'CPU').replace('/GPU:0', 'GPU') for d in times.keys()]
+      values = [times[d] * 1000 for d in times.keys()]
+      
+      fig, ax = plt.subplots(figsize=(10, 6))
+      bars = ax.bar(devices, values, width=0.5, color=['#3498db', '#2ecc71'] if len(devices) > 1 else ['#3498db'], 
+                    edgecolor='black', linewidth=1.5)
+      
+      ax.set_ylabel("Time per Epoch (ms)", fontsize=12, fontweight='bold')
+      ax.set_xlabel("Device", fontsize=12, fontweight='bold')
+      ax.set_title("GPU vs CPU Performance Comparison", fontsize=14, fontweight='bold', pad=20)
+      ax.grid(axis='y', alpha=0.3, linestyle='--')
+      
+      for bar in bars:
+        height = bar.get_height()
+        ax.text(bar.get_x() + bar.get_width()/2., height,
+                f'{height:.3f} ms',
+                ha='center', va='bottom', fontsize=11, fontweight='bold')
+      
+      if len(values) > 1:
+        speedup = values[0] / values[1]
+        ax.text(0.5, 0.95, f'GPU Speedup: {speedup:.2f}x', 
+                transform=ax.transAxes, ha='center', 
+                bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.5),
+                fontsize=11, fontweight='bold')
+      
+      plt.tight_layout()
+      plt.show()
 
 def main():
   experiment = LinearRegressionExperiment()
   X, y = experiment.generate_data()
-  
-  # CPU vs GPU comparison
-  times = experiment.compare_cpu_gpu(X, y, train_steps=2000)
-  print("Per epoch times: ", times)
 
   seeds = [seed + i for i in range(5)]
   results = experiment.run_with_multiple_seeds(X, y, seeds, train_steps=2000)
